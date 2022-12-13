@@ -9,11 +9,15 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DirectoryFilesConnector {
-    private Path absolutePathToWorkDirectory;
-    private List<Path> allDirectoryFilesPaths;
+    private Path absolutePathToWorkDirectory;  // Директория, в которой будет производиться поиск файлов
+    private List<Path> allDirectoryFilesPaths; // Все файлы в каталоге и подкаталогах, найденные в директории
+
+    // Файлы представлены графом, в котором они представлены индексами из списка allDirectoryFilesPaths
     private List<List<Integer>> allDirectoryFilesPathsLikeGraph;
-    private int foundFilesPathsAmount;
+    private int foundFilesPathsAmount;  // Сколько файлов было найдено в каталоге и подкаталогах
     private final String regularExpressionForRequire;
+    private int cycleStartIndexIfCycleWasFound;
+    private int cycleEndIndexIfCycleWasFound;
 
     {
         regularExpressionForRequire = "(require ‘)(.*?)(’)";
@@ -39,7 +43,73 @@ public class DirectoryFilesConnector {
             System.err.println(e.getMessage());
         }
 
+        createGraphFromListOfPaths();  // Из списка путей у нас сформируется направленный граф
+
+        List<Integer> foundCycle = checkCyclesExistence();
+        if (!foundCycle.isEmpty()) {
+            StringJoiner errorCycleTraceback = new StringJoiner("\n");
+            errorCycleTraceback.add("Найден цикл в зависимостях, из-за чего невозможно соединить файлы. Цикл файлов:");
+            foundCycle.forEach((s) -> errorCycleTraceback.add(allDirectoryFilesPaths.get(s).toString()));
+
+            throw new RuntimeException(errorCycleTraceback.toString());
+        }
+
         prepareAndMakeTopologicalSort();
+    }
+
+    private List<Integer> checkCyclesExistence() {
+        int[] arrayForCycle = new int[foundFilesPathsAmount];
+        int[] visitedNodes = new int[foundFilesPathsAmount];
+        for (int i = 0; i < foundFilesPathsAmount; i++) {
+            arrayForCycle[i] = -1;
+            visitedNodes[i] = 0;
+        }
+        cycleStartIndexIfCycleWasFound = -1;
+
+        for (int i = 0; i < foundFilesPathsAmount; ++i)
+            if (isCycleFound(i, visitedNodes, arrayForCycle))
+                break;
+
+        if (cycleStartIndexIfCycleWasFound != -1) {
+            List<Integer> cycle = new ArrayList<>();
+            cycle.add(cycleStartIndexIfCycleWasFound);
+
+            for (int i = cycleEndIndexIfCycleWasFound; i != cycleStartIndexIfCycleWasFound; i = arrayForCycle[i]) {
+                cycle.add(i);
+            }
+
+            cycle.add(cycleStartIndexIfCycleWasFound);
+            return cycle;
+        }
+        return new ArrayList<>();
+    }
+
+    /**
+     * С помощью обхода в глубину ищет цикл в графе. Может найти любой из существующих цикл.
+     *
+     * @param currentNode   индекс текущей просматриваемой вершины
+     * @param visitedNodes  Список просмотренных вершин
+     * @param arrayForCycle Заполняет список индексами вершин, чтобы если нашелся цикл, его можно найти тут.
+     * @return Если хоть один цикл найден, то true. Иначе false
+     */
+    private boolean isCycleFound(int currentNode, int[] visitedNodes, int[] arrayForCycle) {
+        visitedNodes[currentNode] = 1;
+        for (int i = 0; i < allDirectoryFilesPathsLikeGraph.get(currentNode).size(); ++i) {
+            int nextNodeToCheck = allDirectoryFilesPathsLikeGraph.get(currentNode).get(i);
+            if (visitedNodes[nextNodeToCheck] == 0) {
+                arrayForCycle[nextNodeToCheck] = currentNode;
+
+                if (isCycleFound(nextNodeToCheck, visitedNodes, arrayForCycle)) {
+                    return true;
+                }
+            } else if (visitedNodes[nextNodeToCheck] == 1) {
+                cycleEndIndexIfCycleWasFound = currentNode;
+                cycleStartIndexIfCycleWasFound = nextNodeToCheck;
+                return true;
+            }
+        }
+        visitedNodes[currentNode] = 2;
+        return false;
     }
 
     /**
@@ -48,7 +118,7 @@ public class DirectoryFilesConnector {
     public void printFilesAndRelationsForTesting() {
         for (Path path : allDirectoryFilesPaths) {
             try {
-                System.out.printf("Найти для файла %s\n", path.toUri());
+                System.out.printf("Найти для файла %s\n", path.toString());
                 findAllCorrectRequirePathsInFile(path).forEach(System.out::println);
                 System.out.println("\n");
             } catch (IOException e) {
@@ -109,14 +179,12 @@ public class DirectoryFilesConnector {
     }
 
     /**
-     * Формирует направленный граф из списка путей, создает переменные, нужные для работы рекурсивной
+     * Создает переменные, нужные для работы рекурсивной
      * сортировки topologicalSortRecursion и вызывает ее для сортировки.
      *
      * @return Список индексов исходного списка путей в правильном порядке
      */
     private List<Integer> prepareAndMakeTopologicalSort() {
-        createGraphFromListOfPaths();  // Из списка путей у нас сформируется направленный граф
-
         // После сортировки, правильная последовательность будет в обратном порядке
         List<Integer> reversedRightSequenceOfNodes = new ArrayList<>();
 
