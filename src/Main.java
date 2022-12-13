@@ -2,11 +2,11 @@ import DirectoryHandler.DirectoryFilesConnector;
 
 public class Main {
     public static void main(String[] args) {
-        DirectoryFilesConnector taskDirectoryFilesConnector = new DirectoryFilesConnector();
+        DirectoryFilesConnector taskDirectoryFilesConnector = new DirectoryFilesConnector(
+                "/Users/karimhamid/IdeaProjects/second_homework/folder_for_task"
+        );
 
-        taskDirectoryFilesConnector.findAndConnectFiles("/Users/karimhamid/IdeaProjects/second_homework/folder_for_task");
-//        System.out.println('\n');
-        taskDirectoryFilesConnector.printFilesAndRelationsForTesting();
+        taskDirectoryFilesConnector.printFilesAndRelationsForTesting();  // Чтобы распечатать все найденные зависимости
     }
 
 }

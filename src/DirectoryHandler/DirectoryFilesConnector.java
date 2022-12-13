@@ -1,5 +1,6 @@
 package DirectoryHandler;
 
+import java.io.FileWriter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -8,16 +9,21 @@ import java.nio.file.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Класс, который позволяет объединить все файлы в заданной директории и ее подкаталогах в один файл.
+ * Чтобы файл из директории задал к себе зависимость другого файла, нужно прописать в нем запрос
+ * в формате require ‘relative_filepath‘
+ */
 public class DirectoryFilesConnector {
-    private Path absolutePathToWorkDirectory;  // Директория, в которой будет производиться поиск файлов
+    private final Path absolutePathToWorkDirectory;  // Директория, в которой будет производиться поиск файлов
     private List<Path> allDirectoryFilesPaths; // Все файлы в каталоге и подкаталогах, найденные в директории
 
     // Файлы представлены графом, в котором они представлены индексами из списка allDirectoryFilesPaths
     private List<List<Integer>> allDirectoryFilesPathsLikeGraph;
     private int foundFilesPathsAmount;  // Сколько файлов было найдено в каталоге и подкаталогах
     private final String regularExpressionForRequire;
-    private int cycleStartIndexIfCycleWasFound;
-    private int cycleEndIndexIfCycleWasFound;
+    private int cycleStartIndexIfCycleWasFound;  // Сохраненный индекс первой вершины цикла графа из массива цикла
+    private int cycleEndIndexIfCycleWasFound;    // Сохраненный индекс последней вершины цикла графа из массива цикла
 
     {
         regularExpressionForRequire = "(require ‘)(.*?)(’)";
@@ -29,7 +35,7 @@ public class DirectoryFilesConnector {
      *
      * @param directoryPath Директория, для которой искать и производить объединения.
      */
-    public void findAndConnectFiles(String directoryPath) {
+    public DirectoryFilesConnector(String directoryPath) {
         absolutePathToWorkDirectory = Paths.get(directoryPath);
 
         if (!Files.exists(absolutePathToWorkDirectory)) {
@@ -40,11 +46,10 @@ public class DirectoryFilesConnector {
         try {
             allDirectoryFilesPaths = getAllFilesFromDirectory();
         } catch (IOException e) {
-            System.err.println(e.getMessage());
+            throw new RuntimeException(e.getMessage());
         }
 
         createGraphFromListOfPaths();  // Из списка путей у нас сформируется направленный граф
-
         List<Integer> foundCycle = checkCyclesExistence();
         if (!foundCycle.isEmpty()) {
             StringJoiner errorCycleTraceback = new StringJoiner("\n");
@@ -54,9 +59,17 @@ public class DirectoryFilesConnector {
             throw new RuntimeException(errorCycleTraceback.toString());
         }
 
-        prepareAndMakeTopologicalSort();
+        List<Integer> sortedGraph = prepareAndMakeTopologicalSort();
+
+        writeResultToFile(sortedGraph);
     }
 
+    /**
+     * Проверяет наличие циклов зависимостей между файлами по графу.
+     * Вызывает рекурсивную вспомогательную функцию isCycleFound.
+     *
+     * @return Список индексов путей цикла. Либо пустой список, если циклов не обнаружено
+     */
     private List<Integer> checkCyclesExistence() {
         int[] arrayForCycle = new int[foundFilesPathsAmount];
         int[] visitedNodes = new int[foundFilesPathsAmount];
@@ -185,8 +198,7 @@ public class DirectoryFilesConnector {
      * @return Список индексов исходного списка путей в правильном порядке
      */
     private List<Integer> prepareAndMakeTopologicalSort() {
-        // После сортировки, правильная последовательность будет в обратном порядке
-        List<Integer> reversedRightSequenceOfNodes = new ArrayList<>();
+        List<Integer> rightSequenceOfNodes = new ArrayList<>();
 
         boolean[] visitedNodes = new boolean[foundFilesPathsAmount];
         for (int i = 0; i < foundFilesPathsAmount; i++) {
@@ -195,15 +207,8 @@ public class DirectoryFilesConnector {
 
         for (int i = 0; i < foundFilesPathsAmount; i++) {
             if (!visitedNodes[i]) {
-                topologicalSortRecursion(i, visitedNodes, reversedRightSequenceOfNodes);
+                topologicalSortRecursion(i, visitedNodes, rightSequenceOfNodes);
             }
-        }
-
-        List<Integer> rightSequenceOfNodes = new ArrayList<>();
-
-        // Разворачиваем сортированный список
-        for (int i = reversedRightSequenceOfNodes.size() - 1; i >= 0; i--) {
-            rightSequenceOfNodes.add(reversedRightSequenceOfNodes.get(i));
         }
 
         return rightSequenceOfNodes;
@@ -211,7 +216,6 @@ public class DirectoryFilesConnector {
 
     /**
      * Рекурсивно выполняет топологическую сортировку для направленного графа.
-     * Важно, что полученная последовательность развернута.
      *
      * @param currentNode          Индекс текущей просматриваемой вершины из массива путей (allDirectoryFilesPaths).
      * @param visitedNodes         Массив, в котором указаны статусы просмотра вершин
@@ -259,6 +263,24 @@ public class DirectoryFilesConnector {
                         allDirectoryFilesPaths.indexOf(path)
                 );  // Получаем индекс файла из исходного allDirectoryFilesPaths списка
             }
+        }
+    }
+
+    /**
+     * Записывает содержимое всех найденных файлов в файл answerFile.txt, который лежит в рабочей директории.
+     * @param indexesOfFilesInOrder Порядок индексов файлов из allDirectoryFilesPaths, в котором записывать содержимое.
+     */
+    private void writeResultToFile(List<Integer> indexesOfFilesInOrder) {
+        Path resultFilePath = Paths.get(absolutePathToWorkDirectory.toString(), "answerFile.txt");
+
+        try (FileWriter resultFile = new FileWriter(resultFilePath.toFile(), false)) {
+            for (Integer integer : indexesOfFilesInOrder) {
+                resultFile.write(
+                        Files.readString(allDirectoryFilesPaths.get(integer))
+                );
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Не удалось записать результат в файл.");
         }
     }
 }
