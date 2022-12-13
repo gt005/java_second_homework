@@ -5,7 +5,7 @@ public class Main {
         DirectoryFilesConnector taskDirectoryFilesConnector = new DirectoryFilesConnector();
 
         taskDirectoryFilesConnector.findAndConnectFiles("/Users/karimhamid/IdeaProjects/second_homework/folder_for_task");
+        taskDirectoryFilesConnector.printFilesAndRelationsForTesting();
     }
-
 
 }
