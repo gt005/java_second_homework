@@ -1,4 +1,4 @@
-package DirectoryHandler;
+package directoryHandler;
 
 import java.io.FileWriter;
 import java.util.*;
@@ -26,7 +26,7 @@ public class DirectoryFilesConnector {
     private int cycleEndIndexIfCycleWasFound;    // Сохраненный индекс последней вершины цикла графа из массива цикла
 
     {
-        regularExpressionForRequire = "(require ‘)(.*?)(’)";
+        regularExpressionForRequire = "(require ‘)(.*?)(’)";  // Строка вида "require ‘anything‘"
     }
 
     /**

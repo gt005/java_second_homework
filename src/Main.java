@@ -1,4 +1,4 @@
-import DirectoryHandler.DirectoryFilesConnector;
+import directoryHandler.DirectoryFilesConnector;
 
 public class Main {
     public static void main(String[] args) {
@@ -8,5 +8,4 @@ public class Main {
 
         taskDirectoryFilesConnector.printFilesAndRelationsForTesting();  // Чтобы распечатать все найденные зависимости
     }
-
 }
